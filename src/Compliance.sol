@@ -6,23 +6,17 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IdentityRegistry} from "./IdentityRegistry.sol";
 
 /// @title Compliance
-/// @notice The transfer gate. The token asks this contract before value moves,
-///         and moves it only on `Denial.None`.
+/// @notice Transfer gate. The token calls this before moving value and proceeds
+///         only on Denial.None.
+/// @dev Issuance and secondary transfer are separate checks. Issuance requires a
+///      live accreditation claim; a transfer between verified holders does not,
+///      unless the policy is tightened. See ADR-003.
 ///
-/// @dev Primary issuance and secondary transfer are deliberately different
-///      checks. Issuance requires a live accreditation claim; a routine
-///      secondary transfer between two verified holders may not (ADR-003).
-///
-///      Two policies are left configurable rather than hard-coded, because the
-///      answers belong to counsel and the contract's job is to be able to
-///      express whichever answer comes back:
-///
-///        - `requireSenderKycLive` — when a holder's KYC lapses, may they still
-///          send? They clearly cannot receive. Whether they may exit is a
-///          policy question with a real argument on both sides.
-///        - `lockupEnd` — most private placement exemptions impose a holding
-///          period before any resale (ADR-007). Until counsel confirms the
-///          exemption, the mechanism exists and the date is a parameter.
+///      requireSenderKycLive and lockupEnd stay configurable. A lapsed holder
+///      cannot receive, but whether they may still exit is a legal call, and the
+///      resale holding period depends on which exemption the offering uses. Both
+///      answers belong to counsel, so the contract holds the mechanism and takes
+///      the answer as a parameter. See ADR-007.
 contract Compliance is Ownable {
     enum Denial {
         None,

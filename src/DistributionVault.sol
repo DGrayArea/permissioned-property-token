@@ -8,29 +8,20 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {PropertyToken} from "./PropertyToken.sol";
 
 /// @title DistributionVault
-/// @notice Distributes rental income in a stablecoin, pro rata, against a
-///         record date.
+/// @notice Distributes rental income in a stablecoin, pro rata, against a record
+///         date.
+/// @dev Balances move between distributions, so paying against live balances
+///      would pay a holder who has already sold. Each distribution opens a
+///      snapshot and entitlements read that instant. This is the record date the
+///      offering documents already use. See ADR-004.
 ///
-/// @dev Three decisions from ADR-004, made explicit here:
+///      Claims are pull-based. A reverting recipient cannot block the
+///      distribution, and each holder pays their own claim gas.
 ///
-///      1. RECORD DATE. Balances change between distributions, so paying
-///         against live balances is wrong: a holder who sold on the 14th would
-///         receive the quarter's income. Each distribution opens a snapshot,
-///         and entitlements are computed from balances as they stood at that
-///         instant. This is the record date securities practice already uses,
-///         which means it maps onto the offering documents without translation.
-///
-///      2. PULL, NOT PUSH. Holders claim. A failing or hostile recipient
-///         cannot block a distribution to everyone else, and the gas cost of
-///         paying N holders is borne by the N holders.
-///
-///      3. DUST AND UNCLAIMED FUNDS CARRY FORWARD. Integer division leaves a
-///         remainder every time, and some holders never claim. Both are the
-///         same problem — money in the vault nobody has claimed — and both are
-///         resolved the same way: when the claim window closes, whatever is
-///         left rolls into the next distribution's pool. Nothing is swept
-///         quietly to the issuer, and `undistributed()` makes the balance
-///         visible at all times.
+///      Rounding remainder and unclaimed balances are the same problem: money
+///      sitting in the vault that nobody has taken. Both roll into the next pool
+///      when the claim window closes. Nothing is swept to the issuer, and
+///      undistributed() keeps the amount visible.
 contract DistributionVault is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -44,7 +35,7 @@ contract DistributionVault is Ownable, ReentrancyGuard {
     }
 
     PropertyToken public immutable token;
-    /// @notice The distribution currency — a stablecoin in production.
+    /// @notice Distribution currency. A stablecoin in production.
     IERC20 public immutable currency;
 
     Distribution[] private _distributions;

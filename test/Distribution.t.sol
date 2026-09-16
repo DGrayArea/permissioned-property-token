@@ -29,10 +29,10 @@ contract DistributionTest is Base {
         assertEq(usdc.balanceOf(address(vault)), 0);
     }
 
-    /// @notice The reason a record date exists. Alice sells her entire position
-    ///         the day after the distribution opens, and is still owed the
-    ///         income for the period she held it. Bob, who bought after the
-    ///         record date, is owed nothing for that period.
+    /// @dev Why the record date exists. Alice sells her whole position the day
+    ///      after the distribution opens and is still owed the income for the
+    ///      period she held it. Bob bought after the record date and is owed
+    ///      nothing for that period.
     function test_RecordDate_SellerKeepsEntitlement_BuyerGetsNothing() public {
         uint256 id = _distribute(10_000e6);
 
@@ -101,10 +101,9 @@ contract DistributionTest is Base {
 
     // ------------------------------------------------------------------- dust
 
-    /// @notice Integer division cannot divide 10 units among holders of 5:3:2
-    ///         without a remainder. The remainder is not stranded and is not
-    ///         swept — it is visible in `undistributed()` and rolls into the
-    ///         next distribution.
+    /// @dev Integer division cannot split 7 units across a 5:3:2 holding
+    ///      without a remainder. The remainder is neither stranded nor swept.
+    ///      It surfaces in undistributed() and joins the next distribution.
     function test_Dust_IsCarriedForward_NotStranded() public {
         uint256 id = _distribute(7); // 7 units against a 5:3:2 split
 
@@ -150,9 +149,9 @@ contract DistributionTest is Base {
         assertEq(vault.undistributed(), 0); // and consumed
     }
 
-    /// @notice Unclaimed funds are the same problem as dust and take the same
-    ///         path. Carol never claims; her share rolls forward rather than
-    ///         being stranded in the vault or swept to the issuer.
+    /// @dev Unclaimed funds are the same problem as dust and take the same
+    ///      path. Carol never claims, so her share rolls forward instead of
+    ///      sitting in the vault or going to the issuer.
     function test_UnclaimedFunds_RollForward() public {
         uint256 id = _distribute(10_000e6);
 

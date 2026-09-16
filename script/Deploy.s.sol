@@ -12,11 +12,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 ///
 /// @dev Chain choice follows ADR-001: one chain, not two. A permissioned token
 ///      cannot reach L1 liquidity by construction, and splitting issuance from
-///      secondary means bridging a restricted security — which requires running
-///      the compliance stack twice or losing the restrictions at the bridge.
+///      secondary means bridging a restricted security. That requires running
+///      the compliance stack twice, or the restrictions are lost at the bridge.
 ///
-///      In production `owner` is a Safe, not an EOA, and the deploy is executed
-///      by the multi-sig rather than a single key.
+///      In production owner is a Safe, not an EOA, and the multi-sig executes
+///      the deploy rather than a single key.
 contract Deploy is Script {
     uint16 internal constant US = 840;
     uint16 internal constant GB = 826;

@@ -6,24 +6,18 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Compliance} from "./Compliance.sol";
 
 /// @title PropertyToken
-/// @notice A permissioned ERC-20 representing beneficial interest in an SPV
-///         holding one property.
+/// @notice Permissioned ERC-20 representing beneficial interest in an SPV that
+///         holds one property.
+/// @dev Fungible, not an NFT. A holder's stake is their balance over total
+///      supply. There are no token ids.
 ///
-/// @dev This is fungible, not an NFT. A holder's stake is their balance as a
-///      fraction of total supply; there are no token ids and no per-unit
-///      identity.
+///      Every movement of value passes the compliance gate, so a marketplace
+///      calling transferFrom on behalf of an unverified buyer reverts. The token
+///      is therefore unlistable on open venues by construction. See ADR-007.
 ///
-///      Two behaviours beyond a plain ERC-20:
-///
-///      1. Every movement of value passes through the compliance gate, which is
-///         what makes the token unlistable on open venues — an arbitrary buyer
-///         has no verified identity, so a marketplace's `transferFrom` reverts.
-///         That is the design working, not failing (ADR-007).
-///
-///      2. Balances are checkpointed so a distribution can pay against a record
-///         date rather than against live balances (ADR-004). OpenZeppelin
-///         removed `ERC20Snapshot` in v5; this is a minimal equivalent, kept
-///         in-repo and deliberately small enough to audit by reading.
+///      Balances are checkpointed so a distribution can read them as of a past
+///      instant. OpenZeppelin dropped ERC20Snapshot in v5; this is a minimal
+///      replacement, kept short enough to audit by reading. See ADR-004.
 contract PropertyToken is ERC20, Ownable {
     struct Checkpoint {
         uint64 id;
@@ -139,9 +133,9 @@ contract PropertyToken is ERC20, Ownable {
         _write(_supplyCheckpoints, totalSupply());
     }
 
-    /// @dev Push the value as it stood *before* the pending change, but only
-    ///      once per snapshot — the first write after a snapshot opens is the
-    ///      one that captures the record-date value.
+    /// @dev Records the value as it stood before the pending change, once per
+    ///      snapshot. The first write after a snapshot opens is the one holding
+    ///      the record-date value; later writes in the same snapshot are skipped.
     function _write(Checkpoint[] storage checkpoints, uint256 currentValue) private {
         uint64 current = _currentSnapshotId;
         uint256 length = checkpoints.length;

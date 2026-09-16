@@ -4,21 +4,14 @@ pragma solidity 0.8.28;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title IdentityRegistry
-/// @notice Minimal ONCHAINID-style registry mapping wallets to identity records.
+/// @notice Wallet to identity record, with claims written by trusted issuers.
+/// @dev KYC and accreditation are separate claims, from separate issuers, with
+///      separate expiries. They establish different facts and lapse on different
+///      clocks, so one "verified" flag cannot stand for both. See ADR-003.
 ///
-/// @dev Two design points carried from ADR-003:
-///
-///      1. KYC and accreditation are SEPARATE claims with SEPARATE issuers and
-///         SEPARATE expiries. Knowing who someone is and knowing they are
-///         permitted to invest are different questions answered by different
-///         evidence. Collapsing them into one "verified" flag is a compliance
-///         gap, not a simplification.
-///
-///      2. No personal data is stored on chain. A claim records only that a
-///         trusted issuer attested and when that attestation lapses. The
-///         documents behind it never leave the issuer. On-chain data cannot be
-///         deleted, so anything identifying written here would be permanently
-///         irreconcilable with a data subject's right to erasure.
+///      Stores no personal data. A claim holds the fact of attestation and its
+///      expiry, nothing more. On-chain writes are permanent and cannot satisfy
+///      an erasure request, so identifying data stays with the issuer.
 contract IdentityRegistry is Ownable {
     struct Identity {
         bool registered;

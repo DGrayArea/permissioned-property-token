@@ -1,4 +1,4 @@
-# Permissioned Property Token — proof of concept
+# Permissioned Property Token
 
 A working slice of the Phase 1 architecture: a compliance-gated ERC-20
 representing beneficial interest in a single-property SPV, with rental income
@@ -18,24 +18,24 @@ architecture decision records.
 
 ## Contracts
 
-**`IdentityRegistry`** — wallets to identity records. Each record carries two
+**`IdentityRegistry`** maps wallets to identity records. Each record carries two
 independent claims, KYC and accreditation, each with its own trusted issuer and
 its own expiry. No personal data is written on chain: a claim records only that
 an issuer attested and when the attestation lapses.
 
-**`Compliance`** — the transfer gate. Returns a `Denial` reason rather than a
+**`Compliance`** is the transfer gate. It returns a `Denial` reason rather than a
 bare boolean, so a rejected transfer says why. Primary issuance and secondary
 transfer are deliberately different checks. Two policies are parameters rather
-than hard-coded rules — whether a holder whose KYC has lapsed may still send,
-and the lockup end date — because those answers belong to counsel and the
-contract's job is to express whichever one comes back.
+than hard-coded rules: whether a holder whose KYC has lapsed may still send,
+and the lockup end date. Those answers belong to counsel, so the contract holds
+the mechanism and takes the answer as a parameter.
 
-**`PropertyToken`** — ERC-20, fixed maximum supply, every movement of value
+**`PropertyToken`** is an ERC-20 with a fixed maximum supply. Every movement of value is
 routed through the gate. Balances are checkpointed so a distribution can read
 them as they stood at a past instant. OpenZeppelin removed `ERC20Snapshot` in
 v5, so this carries a minimal equivalent, kept small enough to audit by reading.
 
-**`DistributionVault`** — takes rental income in a stablecoin, opens a snapshot
+**`DistributionVault`** takes rental income in a stablecoin, opens a snapshot
 as the record date, and lets holders pull their pro-rata share. The remainder
 from integer division and the balance left by holders who never claim are the
 same problem, and take the same path: when the claim window closes, whatever is
@@ -52,7 +52,7 @@ forge test
 forge test --match-test test_RecordDate -vvv
 ```
 
-Deploy to Base Sepolia — one chain, per ADR-001:
+Deploy to Base Sepolia. One chain, per ADR-001:
 
 ```bash
 PRIVATE_KEY=0x... forge script script/Deploy.s.sol --rpc-url base_sepolia --broadcast --verify
@@ -63,7 +63,7 @@ PRIVATE_KEY=0x... forge script script/Deploy.s.sol --rpc-url base_sepolia --broa
 **The venue problem.** A marketplace holding a valid unlimited approval still
 cannot settle to an arbitrary buyer, because the buyer is the destination and
 the buyer has no verified identity. Registering the venue itself changes
-nothing — there is a test for that too. The same venue settling between two
+nothing, and there is a test for that too. The same venue settling between two
 verified holders succeeds, which is what a permissioned matching venue would
 do. This is the mechanical basis for the claim that Ethereum L1's liquidity is
 unreachable for this asset class.
@@ -74,8 +74,8 @@ Bob, who bought after the record date, is owed nothing for it. Paying against
 live balances would get this backwards, and getting it backwards is a dispute
 with an investor rather than a rounding error.
 
-**Dust.** Seven units split across holders of 5:3:2 pays 3, 2 and 1 — six units
-out of seven. The seventh is not stranded and not swept. After the window
+**Dust.** Seven units split across holders of 5:3:2 pays 3, 2 and 1, or six
+units out of seven. The seventh is not stranded and not swept. After the window
 closes it appears in `undistributed()` and joins the next pool, and there is a
 test showing carry alone can fund a distribution.
 
@@ -93,7 +93,7 @@ The first is the one that matters. Every rounding decision, every carry-forward
 and every repeat-claim attempt has to respect it.
 
 **Access control.** Each privileged role is tested against every caller that
-should not hold it — including the other issuer. The accreditation issuer
+should not hold it, including the other issuer. The accreditation issuer
 cannot attest to identity, the KYC issuer cannot attest to accreditation, and
 the owner, who appoints both, cannot issue claims directly. Separating *who may
 appoint an attestor* from *who may attest* is the reason a trusted-issuer
@@ -126,8 +126,8 @@ forge coverage --no-match-contract VaultInvariantTest --report summary
 Governance, the document registry, redemption and the valuation attestation
 pipeline. Governance is assembled from audited OpenZeppelin components and
 proves nothing here. Redemption and valuation are the highest-severity part of
-the full system — anyone who can move NAV can extract money — and deserve more
-care than a proof of concept can give them.
+the full system, since anyone who can move NAV can extract money. They deserve
+more care than a proof of concept can give them.
 
 The compliance module set is minimal: jurisdiction, holder cap, lockup, pause.
 A production build would use the ERC-3643 module system rather than this, for

@@ -7,10 +7,10 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @notice Who may write to the register, and what a claim's expiry means.
 ///
-/// @dev The role separation here is the point. A privileged action that can be
-///      reached from an unexpected caller is the failure mode that drains
-///      systems like this one, so each issuer role is tested against every
-///      caller that should not hold it — including the *other* issuer.
+/// @dev Each issuer role is tested against every caller that should not hold
+///      it, including the other issuer. A privileged action reachable from an
+///      unexpected caller is the failure mode that drains systems shaped like
+///      this one.
 contract IdentityRegistryTest is Base {
     address internal dave = makeAddr("dave");
 
@@ -112,7 +112,7 @@ contract IdentityRegistryTest is Base {
         registry.setKycClaim(alice, uint64(block.timestamp + 1 days));
     }
 
-    /// @dev ...and the KYC issuer must not be able to attest to accreditation.
+    /// @dev The KYC issuer must not be able to attest to accreditation.
     function test_SetAccreditationClaim_RevertsFor_KycIssuer() public {
         vm.expectRevert(
             abi.encodeWithSelector(IdentityRegistry.NotAccreditationIssuer.selector, kycIssuer)
@@ -121,9 +121,9 @@ contract IdentityRegistryTest is Base {
         registry.setAccreditationClaim(alice, uint64(block.timestamp + 1 days));
     }
 
-    /// @dev The owner administers issuers but does not get to issue claims
-    ///      directly. Separating "who may appoint an attestor" from "who may
-    ///      attest" is the whole point of having a trusted-issuer registry.
+    /// @dev The owner appoints issuers but cannot write claims directly.
+    ///      Appointing an attestor and attesting are separate powers, which is
+    ///      what a trusted-issuer registry exists to enforce.
     function test_SetKycClaim_RevertsFor_Owner() public {
         vm.expectRevert(abi.encodeWithSelector(IdentityRegistry.NotKycIssuer.selector, issuer));
         vm.prank(issuer);

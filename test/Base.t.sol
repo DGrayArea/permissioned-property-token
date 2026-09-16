@@ -64,7 +64,7 @@ abstract contract Base is Test {
         _setAccreditation(who, uint64(block.timestamp + 365 days));
     }
 
-    /// @dev Identity and KYC only — no accreditation claim.
+    /// @dev Identity and KYC only. No accreditation claim.
     function _onboardKycOnly(address who, uint16 country) internal {
         vm.prank(kycIssuer);
         registry.registerIdentity(who, country);

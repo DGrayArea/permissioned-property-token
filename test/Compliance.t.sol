@@ -185,11 +185,10 @@ contract ComplianceTest is Base {
 
     // ------------------------------------------------------- the venue problem
 
-    /// @notice The headline behaviour. A marketplace holding a valid approval
-    ///         still cannot sell to an arbitrary buyer, because the buyer is
-    ///         the destination and the buyer has no identity. This is why the
-    ///         token cannot be listed on any open venue — and why the L1
-    ///         liquidity argument in the brief does not apply to it.
+    /// @dev A marketplace holding a valid approval still cannot sell to an
+    ///      arbitrary buyer. The buyer is the destination, and the buyer has no
+    ///      identity. No open venue can list this token, which is why L1
+    ///      liquidity is unreachable for it.
     function test_OpenMarketplace_CannotSettle_ToUnverifiedBuyer() public {
         MockMarketplace venue = new MockMarketplace();
         _issue(alice, 100e18);

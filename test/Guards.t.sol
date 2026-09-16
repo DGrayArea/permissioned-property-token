@@ -66,8 +66,8 @@ contract GuardsTest is Base {
         assertEq(token.totalSupply(), 150e18);
     }
 
-    /// @dev Repeated snapshots without intervening activity all read the same
-    ///      balances — no checkpoint is written until something changes.
+    /// @dev Repeated snapshots with no activity between them read the same
+    ///      balances. No checkpoint is written until a balance changes.
     function test_Snapshots_WithoutActivity_ReadIdentically() public {
         _issue(alice, 100e18);
 
