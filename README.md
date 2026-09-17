@@ -1,134 +1,107 @@
 # Permissioned Property Token
 
-A working slice of the Phase 1 architecture: a compliance-gated ERC-20
-representing beneficial interest in a single-property SPV, with rental income
-distributed against a record date.
+A compliance-gated ERC-20 representing beneficial interest in an SPV that holds
+one property, with rental income distributed against a record date.
 
-This is not a T-REX fork and it is not a candidate for production. It exists to
-make three arguments concrete enough to test, rather than leaving them as
-assertions in a document. The reasoning behind each is in the accompanying
-architecture decision records.
+Proof of concept. Not production, not a T-REX fork.
 
-| Claim | Where it is demonstrated |
-|---|---|
-| The token cannot be listed on an open venue, by construction | `test_OpenMarketplace_CannotSettle_ToUnverifiedBuyer` |
-| KYC and accreditation are separate claims with separate expiries | `test_Issue_RevertsFor_VerifiedButNotAccredited` |
-| Distribution must pay against a record date, not live balances | `test_RecordDate_SellerKeepsEntitlement_BuyerGetsNothing` |
-| Dust and unclaimed funds carry forward and stay visible | `test_Dust_IsCarriedForward_NotStranded` |
+## Quick start
 
-## Contracts
-
-**`IdentityRegistry`** maps wallets to identity records. Each record carries two
-independent claims, KYC and accreditation, each with its own trusted issuer and
-its own expiry. No personal data is written on chain: a claim records only that
-an issuer attested and when the attestation lapses.
-
-**`Compliance`** is the transfer gate. It returns a `Denial` reason rather than a
-bare boolean, so a rejected transfer says why. Primary issuance and secondary
-transfer are deliberately different checks. Two policies are parameters rather
-than hard-coded rules: whether a holder whose KYC has lapsed may still send,
-and the lockup end date. Those answers belong to counsel, so the contract holds
-the mechanism and takes the answer as a parameter.
-
-**`PropertyToken`** is an ERC-20 with a fixed maximum supply. Every movement of value is
-routed through the gate. Balances are checkpointed so a distribution can read
-them as they stood at a past instant. OpenZeppelin removed `ERC20Snapshot` in
-v5, so this carries a minimal equivalent, kept small enough to audit by reading.
-
-**`DistributionVault`** takes rental income in a stablecoin, opens a snapshot
-as the record date, and lets holders pull their pro-rata share. The remainder
-from integer division and the balance left by holders who never claim are the
-same problem, and take the same path: when the claim window closes, whatever is
-left rolls into the next distribution. Nothing is swept to the issuer, and
-`undistributed()` keeps the figure visible.
-
-## Running it
+Submodules matter here, so clone recursively:
 
 ```bash
+git clone --recursive https://github.com/DGrayArea/permissioned-property-token
+cd permissioned-property-token
 forge test
 ```
 
-```bash
-forge test --match-test test_RecordDate -vvv
-```
-
-Deploy to Base Sepolia. One chain, per ADR-001:
+Deploy to Base Sepolia:
 
 ```bash
-PRIVATE_KEY=0x... forge script script/Deploy.s.sol --rpc-url base_sepolia --broadcast --verify
+PRIVATE_KEY=0x... forge script script/Deploy.s.sol \
+  --rpc-url https://sepolia.base.org --broadcast --verify
 ```
 
-## What the tests establish
+It prints four addresses. Feed three back in to seed the deployment with
+investors, an issuance and a distribution:
 
-**The venue problem.** A marketplace holding a valid unlimited approval still
-cannot settle to an arbitrary buyer, because the buyer is the destination and
-the buyer has no verified identity. Registering the venue itself changes
-nothing, and there is a test for that too. The same venue settling between two
-verified holders succeeds, which is what a permissioned matching venue would
-do. This is the mechanical basis for the claim that Ethereum L1's liquidity is
-unreachable for this asset class.
+```bash
+export REGISTRY=0x... TOKEN=0x... VAULT=0x...
+forge script script/Seed.s.sol --rpc-url https://sepolia.base.org --broadcast
+```
 
-**The record date.** Alice exits her entire position the day after a
-distribution opens. She is still owed the income for the period she held it;
-Bob, who bought after the record date, is owed nothing for it. Paying against
-live balances would get this backwards, and getting it backwards is a dispute
-with an investor rather than a rounding error.
+Distribution needs testnet USDC. Without it the seed still issues tokens and
+reports what it skipped.
 
-**Dust.** Seven units split across holders of 5:3:2 pays 3, 2 and 1, or six
-units out of seven. The seventh is not stranded and not swept. After the window
-closes it appears in `undistributed()` and joins the next pool, and there is a
-test showing carry alone can fund a distribution.
+## Contracts
 
-**The invariants.** Five properties held across 128,000 randomised calls per
-run, over arbitrary interleavings of distributions, claims, transfers, closes
-and time jumps:
+| Contract | What it does |
+| --- | --- |
+| `IdentityRegistry` | Maps wallets to identity records. KYC and accreditation are separate claims. |
+| `Compliance` | The transfer gate. Returns a `Denial` reason rather than a bare bool. |
+| `PropertyToken` | ERC-20 routed through the gate, with balance checkpoints. |
+| `DistributionVault` | Pull-based pro-rata claims against a snapshot. |
 
-- the vault never pays out more than it took in
-- its balance always equals deposits minus payments
-- per-distribution `claimed` figures sum to the global total
-- no distribution overspends its own pool
-- supply is conserved across every gated transfer
+## Design notes
 
-The first is the one that matters. Every rounding decision, every carry-forward
-and every repeat-claim attempt has to respect it.
+**KYC and accreditation are separate claims.** Different issuers, different
+expiries. They establish different facts and lapse on different clocks, so a
+single "verified" flag can't stand for both.
 
-**Access control.** Each privileged role is tested against every caller that
-should not hold it, including the other issuer. The accreditation issuer
-cannot attest to identity, the KYC issuer cannot attest to accreditation, and
-the owner, who appoints both, cannot issue claims directly. Separating *who may
-appoint an attestor* from *who may attest* is the reason a trusted-issuer
-registry exists at all, and a privileged action reachable from an unexpected
-caller is the failure mode that drains systems shaped like this one.
+**The token can't be listed on an open venue.** `transferFrom` checks the
+recipient against the registry, and a marketplace buyer has no identity, so it
+reverts. `test_OpenMarketplace_CannotSettle_ToUnverifiedBuyer` covers it.
+Whitelisting the venue doesn't help either, since the venue isn't the
+destination — there's a test for that too.
 
-## Coverage
+**Distribution pays against a record date.** Balances move between
+distributions, so paying live balances would pay someone who already sold. Each
+distribution opens a snapshot and entitlements read that instant. OpenZeppelin
+dropped `ERC20Snapshot` in v5, so `PropertyToken` carries a minimal replacement.
+
+**Dust carries forward.** Integer division leaves a remainder every time, and
+some holders never claim. Both roll into the next pool when the claim window
+closes. `undistributed()` keeps the figure visible rather than letting it sit
+in the contract unaccounted for.
+
+**Two policies are parameters, not hard-coded rules.** Whether a holder whose
+KYC has lapsed can still send, and the lockup end date. Those are legal calls,
+so the contract holds the mechanism and takes the answer as a parameter.
+
+## Tests
 
 79 tests across four unit suites and one invariant suite.
 
-| | Lines | Branches | Functions |
-|---|---|---|---|
-| `IdentityRegistry` | 100% | 100% | 100% |
-| `Compliance` | 100% | 60% | 100% |
-| `DistributionVault` | 92% | 100% | 88% |
-| `PropertyToken` | 92% | 81% | 92% |
-| **Total** | **87%** | **89%** | **93%** |
-
-The gaps are honest ones. `PropertyToken` carries a burn path that no entry
-point currently reaches, and `Compliance` has a holder-cap branch that only
-executes before the token address is bound. Neither is on a critical path, and
-both would be either covered or removed before an audit.
-
 ```bash
+forge test
 forge coverage --no-match-contract VaultInvariantTest --report summary
 ```
 
-## Deliberately absent
+Five invariants, each held across 128,000 randomised calls over arbitrary
+interleavings of distributions, claims, transfers, closes and time jumps:
 
-Governance, the document registry, redemption and the valuation attestation
-pipeline. Governance is assembled from audited OpenZeppelin components and
-proves nothing here. Redemption and valuation are the highest-severity part of
-the full system, since anyone who can move NAV can extract money. They deserve
-more care than a proof of concept can give them.
+- the vault never pays out more than it took in
+- its balance equals deposits minus payments
+- per-distribution `claimed` sums to the global total
+- no distribution overspends its own pool
+- supply is conserved across every gated transfer
 
-The compliance module set is minimal: jurisdiction, holder cap, lockup, pause.
-A production build would use the ERC-3643 module system rather than this, for
-the audit economics rather than the feature set.
+Coverage is 87% lines, 89% branches, 93% functions. The gaps are a burn path no
+entry point reaches and a holder-cap branch that only runs before the token
+address is bound.
+
+Access control is tested against every caller that shouldn't hold a role,
+including the other issuer: the accreditation issuer can't attest to identity,
+the KYC issuer can't attest to accreditation, and the owner who appoints both
+can't write claims directly.
+
+## Not included
+
+Governance, document registry, redemption and valuation. Governance is mostly
+OpenZeppelin assembly. Redemption and valuation are the highest-severity part
+of a full system, since anyone who can move NAV can extract money, and they
+need more care than a proof of concept gives them.
+
+The compliance module set is minimal — jurisdiction, holder cap, lockup, pause.
+A production build would use the ERC-3643 module system instead, mainly for the
+audit economics.
